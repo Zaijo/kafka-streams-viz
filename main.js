@@ -3,6 +3,7 @@
  */
 
 var dpr, rc, ctx;
+var graph = []; // global graph for inspection
 const DEBUG = false;
 const STORAGE_KEY = 'kafka-streams-viz';
 
@@ -53,18 +54,22 @@ function convertTopoToDot(topo) {
 				else if (type === 'topics') {
 					// from
 					outside.push(`"${linkedName}" -> "${entityName}";`);
+					graph.push([linkedName, entityName]);
 					topics.add(linkedName);
 				}
 				else if (type === 'topic') {
 					// to
 					outside.push(`"${entityName}" -> "${linkedName}";`);
+					graph.push([entityName, linkedName]);
 					topics.add(linkedName);
 				}
 				else if (type === 'stores') {
 					if (entityName.includes("JOIN")) {
 						outside.push(`"${linkedName}" -> "${entityName}";`);
+						graph.push([linkedName, entityName]);
 					} else {
 						outside.push(`"${entityName}" -> "${linkedName}";`);
+						graph.push([entityName, linkedName]);
 					}
 
 					stores.add(linkedName);
@@ -83,6 +88,7 @@ function convertTopoToDot(topo) {
 				if (linkedName === 'none') return;
 
 				results.push(`"${entityName}" -> "${linkedName}";`);
+				graph.push([entityName, linkedName]);
 			});
 		}
 	})
