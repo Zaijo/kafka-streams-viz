@@ -38,34 +38,102 @@
 	<container>
 		<div>
 			<h4>Input Kafka Topology <button onclick="update()">update</button></h4>
+            <input type="checkbox" id="ShowStores" onchange="update()"/><label for="ShowStores">Show Stores</label>
 			<textarea id="input" onkeydown="scheduleUpdate()" onpaste="scheduleUpdate()">
-Topology
-Sub-topologies:
-Sub-topology: 0
-	Source:  KSTREAM-SOURCE-0000000000 (topics: [conversation-meta])
-	--> KSTREAM-TRANSFORM-0000000001
-	Processor: KSTREAM-TRANSFORM-0000000001 (stores: [conversation-meta-state])
-	--> KSTREAM-KEY-SELECT-0000000002
-	<-- KSTREAM-SOURCE-0000000000
-	Processor: KSTREAM-KEY-SELECT-0000000002 (stores: [])
-	--> KSTREAM-FILTER-0000000005
-	<-- KSTREAM-TRANSFORM-0000000001
-	Processor: KSTREAM-FILTER-0000000005 (stores: [])
-	--> KSTREAM-SINK-0000000004
-	<-- KSTREAM-KEY-SELECT-0000000002
-	Sink: KSTREAM-SINK-0000000004 (topic: count-resolved-repartition)
-	<-- KSTREAM-FILTER-0000000005
-Sub-topology: 1
-	Source: KSTREAM-SOURCE-0000000006 (topics: [count-resolved-repartition])
-	--> KSTREAM-AGGREGATE-0000000003
-	Processor: KSTREAM-AGGREGATE-0000000003 (stores: [count-resolved])
-	--> KTABLE-TOSTREAM-0000000007
-	<-- KSTREAM-SOURCE-0000000006
-	Processor: KTABLE-TOSTREAM-0000000007 (stores: [])
-	--> KSTREAM-SINK-0000000008
-	<-- KSTREAM-AGGREGATE-0000000003
-	Sink: KSTREAM-SINK-0000000008 (topic: streams-count-resolved)
-	<-- KTABLE-TOSTREAM-0000000007
+Topologies:
+   Sub-topology: 0
+    Source: KSTREAM-SOURCE-0000000000 (topics: [server-obchodneho-vestnika.dbo.V_OV_INDEX])
+      --> prep-idOv_vydaniaTable-extract-key-and-AFTER-value
+    Processor: prep-idOv_vydaniaTable-extract-key-and-AFTER-value (stores: [])
+      --> idOv_vydaniaTable-repartition-filter
+      <-- KSTREAM-SOURCE-0000000000
+    Processor: idOv_vydaniaTable-repartition-filter (stores: [])
+      --> idOv_vydaniaTable-repartition-sink
+      <-- prep-idOv_vydaniaTable-extract-key-and-AFTER-value
+    Sink: idOv_vydaniaTable-repartition-sink (topic: idOv_vydaniaTable-repartition)
+      <-- idOv_vydaniaTable-repartition-filter
+
+  Sub-topology: 1
+    Source: KSTREAM-SOURCE-0000000001 (topics: [server-obchodneho-vestnika.dbo.V_FORMULAR_OV_INDEX])
+      --> prep-idOv_podaniaTable-extract-key-and-AFTER-value
+    Processor: prep-idOv_podaniaTable-extract-key-and-AFTER-value (stores: [])
+      --> idOv_podaniaTable-repartition-filter
+      <-- KSTREAM-SOURCE-0000000001
+    Processor: idOv_podaniaTable-repartition-filter (stores: [])
+      --> idOv_podaniaTable-repartition-sink
+      <-- prep-idOv_podaniaTable-extract-key-and-AFTER-value
+    Sink: idOv_podaniaTable-repartition-sink (topic: idOv_podaniaTable-repartition)
+      <-- idOv_podaniaTable-repartition-filter
+
+  Sub-topology: 2
+    Source: KSTREAM-SOURCE-0000000002 (topics: [server-obchodneho-vestnika.dbo.V_FORMULAR_OV_PRILOHA_INDEX])
+      --> prep-idFormular_prilohyTable-extract-key-and-AFTER-value
+    Processor: prep-idFormular_prilohyTable-extract-key-and-AFTER-value (stores: [])
+      --> idFormular_prilohyTable-repartition-filter
+      <-- KSTREAM-SOURCE-0000000002
+    Processor: idFormular_prilohyTable-repartition-filter (stores: [])
+      --> idFormular_prilohyTable-repartition-sink
+      <-- prep-idFormular_prilohyTable-extract-key-and-AFTER-value
+    Sink: idFormular_prilohyTable-repartition-sink (topic: idFormular_prilohyTable-repartition)
+      <-- idFormular_prilohyTable-repartition-filter
+
+  Sub-topology: 3
+    Source: idOv_podaniaTable-repartition-source (topics: [idOv_podaniaTable-repartition])
+      --> idOv_podaniaTable
+    Source: idOv_vydaniaTable-repartition-source (topics: [idOv_vydaniaTable-repartition])
+      --> idOv_vydaniaTable
+    Processor: idOv_podaniaTable (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000011])
+      --> join-with-vydania-join-this
+      <-- idOv_podaniaTable-repartition-source
+    Processor: idOv_vydaniaTable (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])
+      --> join-with-vydania-join-other
+      <-- idOv_vydaniaTable-repartition-source
+    Processor: join-with-vydania-join-other (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000011])
+      --> join-with-vydania
+      <-- idOv_vydaniaTable
+    Processor: join-with-vydania-join-this (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000005])
+      --> join-with-vydania
+      <-- idOv_podaniaTable
+    Processor: join-with-vydania (stores: [])
+      --> idOv_podaniePlusVydanie
+      <-- join-with-vydania-join-this, join-with-vydania-join-other
+    Processor: idOv_podaniePlusVydanie (stores: [])
+      --> rekey-to-idFormular
+      <-- join-with-vydania
+    Processor: rekey-to-idFormular (stores: [])
+      --> idFormular_podaniePlusVydanie-repartition-filter
+      <-- idOv_podaniePlusVydanie
+    Processor: idFormular_podaniePlusVydanie-repartition-filter (stores: [])
+      --> idFormular_podaniePlusVydanie-repartition-sink
+      <-- rekey-to-idFormular
+    Sink: idFormular_podaniePlusVydanie-repartition-sink (topic: idFormular_podaniePlusVydanie-repartition)
+      <-- idFormular_podaniePlusVydanie-repartition-filter
+
+  Sub-topology: 4
+    Source: idFormular_podaniePlusVydanie-repartition-source (topics: [idFormular_podaniePlusVydanie-repartition])
+      --> idFormular_podaniePlusVydanie
+    Source: idFormular_prilohyTable-repartition-source (topics: [idFormular_prilohyTable-repartition])
+      --> idFormular_prilohyTable
+    Processor: idFormular_podaniePlusVydanie (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000027])
+      --> join-with-prilohy-join-this
+      <-- idFormular_podaniePlusVydanie-repartition-source
+    Processor: idFormular_prilohyTable (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000017])
+      --> join-with-prilohy-join-other
+      <-- idFormular_prilohyTable-repartition-source
+    Processor: join-with-prilohy-join-other (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000027])
+      --> join-with-prilohy
+      <-- idFormular_prilohyTable
+    Processor: join-with-prilohy-join-this (stores: [KSTREAM-TOTABLE-STATE-STORE-0000000017])
+      --> join-with-prilohy
+      <-- idFormular_podaniePlusVydanie
+    Processor: join-with-prilohy (stores: [])
+      --> idFormular_podaniePlusVydaniePlusPrilohy
+      <-- join-with-prilohy-join-this, join-with-prilohy-join-other
+    Processor: idFormular_podaniePlusVydaniePlusPrilohy (stores: [])
+      --> KSTREAM-SINK-0000000035
+      <-- join-with-prilohy
+    Sink: KSTREAM-SINK-0000000035 (topic: json-data-12)
+      <-- idFormular_podaniePlusVydaniePlusPrilohy
 			</textarea>
 		</div>
 
@@ -73,7 +141,7 @@ Sub-topology: 1
 			<h4>Output Sketch Diagram</h4>
 			<canvas id="canvas"></canvas>
 		</div>
-	</container>>
+	</container>
 
 	<textarea id="graphviz_code"></textarea>
 	<div id="svg_container"></div>
