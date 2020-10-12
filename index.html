@@ -38,6 +38,7 @@
 	<container>
 		<div>
 			<h4>Input Kafka Topology <button onclick="update()">update</button></h4>
+            <input type="checkbox" id="ShowStores" onchange="update()"/><label for="ShowStores">Show Stores</label>
 			<textarea id="input" onkeydown="scheduleUpdate()" onpaste="scheduleUpdate()">
 Topologies:
    Sub-topology: 0
@@ -140,7 +141,7 @@ Topologies:
 			<h4>Output Sketch Diagram</h4>
 			<canvas id="canvas"></canvas>
 		</div>
-	</container>>
+	</container>
 
 	<textarea id="graphviz_code"></textarea>
 	<div id="svg_container"></div>

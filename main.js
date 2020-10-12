@@ -3,13 +3,25 @@
  */
 
 var dpr, rc, ctx;
-var graph = []; // global graph for inspection with aim to solve #1 issue on github
+var edges = {}; // global graph for inspection with aim to solve #1 issue on github
 const DEBUG = false;
 const STORAGE_KEY = 'kafka-streams-viz';
 
 function processName(name) {
 	return name.replace(/-/g, '-\\n');
 }
+
+function persistEdge(from, to) {
+	if(edges[from] === undefined) {
+		edges[from] = {};
+	}
+
+	edges[from][to] = 1;
+}
+
+const showStores = function () {
+	return document.getElementById("ShowStores").checked;
+};
 
 // converts kafka stream ascii topo description to DOT language
 function convertTopoToDot(topo) {
@@ -20,23 +32,27 @@ function convertTopoToDot(topo) {
 	var topics = new Set();
 	var entityName;
 
+	function isProcessor(name) {
+		return !(stores.has(name) || topics.has(name));
+	}
+
 	// dirty but quick parsing
 	lines.forEach(line => {
 		var sub = /Sub-topology: ([0-9]*)/;
 		var match = sub.exec(line);
 
-		if (match) {
-			if (results.length) results.push(`}`);
-			results.push(`subgraph cluster_${match[1]} {
-			label = "${match[0]}";
-
-			style=filled;
-			color=lightgrey;
-			node [style=filled,color=white];
-			`);
-
-			return;
-		}
+		// if (match) {
+		// 	if (results.length) results.push(`}`);
+		// 	results.push(`subgraph cluster_${match[1]} {
+		// 	label = "${match[0]}";
+		//
+		// 	style=filled;
+		// 	color=lightgrey;
+		// 	node [style=filled,color=white];
+		// 	`);
+		//
+		// 	return;
+		// }
 
 		match = /(Source\:|Processor\:|Sink:)\s+(\S+)\s+\((topics|topic|stores)\:(.*)\)/.exec(line)
 
@@ -54,25 +70,28 @@ function convertTopoToDot(topo) {
 				else if (type === 'topics') {
 					// from
 					outside.push(`"${linkedName}" -> "${entityName}";`);
-					graph.push([linkedName, entityName]);
+					persistEdge(linkedName, entityName)
 					topics.add(linkedName);
 				}
 				else if (type === 'topic') {
 					// to
 					outside.push(`"${entityName}" -> "${linkedName}";`);
-					graph.push([entityName, linkedName]);
+					persistEdge(entityName, linkedName)
 					topics.add(linkedName);
 				}
 				else if (type === 'stores') {
-					if (entityName.includes("JOIN")) {
-						outside.push(`"${linkedName}" -> "${entityName}";`);
-						graph.push([linkedName, entityName]);
-					} else {
-						outside.push(`"${entityName}" -> "${linkedName}";`);
-						graph.push([entityName, linkedName]);
-					}
 
-					stores.add(linkedName);
+					if (showStores()) {
+						if (entityName.includes("JOIN")) {
+							outside.push(`"${linkedName}" -> "${entityName}";`);
+							persistEdge(linkedName, entityName);
+						} else {
+							outside.push(`"${entityName}" -> "${linkedName}";`);
+							persistEdge(entityName, linkedName);
+						}
+
+						stores.add(linkedName);
+					}
 				}
 			});
 
@@ -87,15 +106,35 @@ function convertTopoToDot(topo) {
 				var linkedName = processName(name.trim());
 				if (linkedName === 'none') return;
 
-				results.push(`"${entityName}" -> "${linkedName}";`);
-				graph.push([entityName, linkedName]);
+				// results.push(`"${entityName}" -> "${linkedName}";`);
+				persistEdge(entityName, linkedName);
 			});
 		}
 	})
 
-	if (results.length) results.push(`}`);
-
-	results = results.concat(outside);
+	do {
+		var added = 0;
+		Object.keys(edges).forEach(a => {
+			Object.keys(edges[a]).forEach(b => {
+				Object.keys(edges).forEach(c => {
+					Object.keys(edges[c]).forEach(d => {
+						if (b === c) {
+							// susedne hrany
+							if( isProcessor(b)) {
+								// prechadzaju procesorom
+								if (edges[a][d] === undefined) {
+									// taka hrana este neexistuje
+									edges[a][d] = 1;
+									added += 1;
+								}
+							}
+						}
+						// nesusedne hrany
+					})
+				})
+			})
+		});
+	} while (added > 0);
 
 	stores.forEach(node => {
 		results.push(`"${node}" [shape=cylinder];`)
@@ -104,6 +143,16 @@ function convertTopoToDot(topo) {
 	topics.forEach(node => {
 		results.push(`"${node}" [shape=rect];`)
 	});
+
+	Object.keys(edges).forEach(a => {
+		Object.keys(edges[a]).forEach(b => {
+			if (!(isProcessor(a) || isProcessor(b))) {
+				results.push(`"${a}" -> "${b}";`);
+			}
+		})
+	});
+
+	// if (results.length) results.push(`}`);
 
 	return `
 	digraph G {
