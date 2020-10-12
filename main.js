@@ -3,7 +3,7 @@
  */
 
 var dpr, rc, ctx;
-var graph = []; // global graph for inspection
+var graph = []; // global graph for inspection with aim to solve #1 issue on github
 const DEBUG = false;
 const STORAGE_KEY = 'kafka-streams-viz';
 
