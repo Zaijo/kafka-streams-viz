@@ -7,6 +7,30 @@ var edges = {}; // global graph for inspection with aim to solve #1 issue on git
 const DEBUG = false;
 const STORAGE_KEY = 'kafka-streams-viz';
 
+var x = document.getElementById("ServersSelector");
+
+const servers = [
+	server("localhost:9973", "fulltext"),
+	server("localhost:9900", "joiner"),
+	server("localhost:9978", "debezium")
+]
+
+function createOption(server) {
+	var option = document.createElement("option");
+	option.text = server.name;
+	option.value = server.location;
+	x.add(option);
+}
+
+function selectedServers() {
+	var ddd = [];
+	for (var i = 0; i < x.selectedOptions.length; i++) {
+		 var s = x.selectedOptions[i];
+		ddd.push(server(s.value, s.text));
+	}
+	return ddd;
+}
+
 function processName(name) {
 	return name.replace(/-/g, '-\\n');
 }
@@ -23,14 +47,24 @@ const showStores = function () {
 	return document.getElementById("ShowStores").checked;
 };
 
+function egdeWithLabel(a, b, label) {
+	return `"${a}" -> "${b}" [ label = "${label}" ];`;
+}
+
+function egde(a, b) {
+	return `"${a}" -> "${b}";`;
+}
+
 // converts kafka stream ascii topo description to DOT language
-function convertTopoToDot(topo) {
+function convertTopoToDot(topo, label) {
 	var lines = topo.split('\n');
 	var results = [];
 	var outside = [];
 	var stores = new Set();
 	var topics = new Set();
 	var entityName;
+
+	edges = {};
 
 	function isProcessor(name) {
 		return !(stores.has(name) || topics.has(name));
@@ -69,13 +103,15 @@ function convertTopoToDot(topo) {
 				}
 				else if (type === 'topics') {
 					// from
-					outside.push(`"${linkedName}" -> "${entityName}";`);
+					// outside.push(`"${linkedName}" -> "${entityName}";`);
+					outside.push(egdeWithLabel(linkedName, entityName, label));
 					persistEdge(linkedName, entityName)
 					topics.add(linkedName);
 				}
 				else if (type === 'topic') {
 					// to
-					outside.push(`"${entityName}" -> "${linkedName}";`);
+					// outside.push(`"${entityName}" -> "${linkedName}";`);
+					outside.push(egdeWithLabel(entityName, linkedName, label));
 					persistEdge(entityName, linkedName)
 					topics.add(linkedName);
 				}
@@ -83,10 +119,12 @@ function convertTopoToDot(topo) {
 
 					if (showStores()) {
 						if (entityName.includes("JOIN")) {
-							outside.push(`"${linkedName}" -> "${entityName}";`);
+							// outside.push(`"${linkedName}" -> "${entityName}";`);
+							outside.push(egdeWithLabel(linkedName, entityName, label));
 							persistEdge(linkedName, entityName);
 						} else {
-							outside.push(`"${entityName}" -> "${linkedName}";`);
+							// outside.push(`"${entityName}" -> "${linkedName}";`);
+							outside.push(egdeWithLabel(entityName, linkedName, label));
 							persistEdge(entityName, linkedName);
 						}
 
@@ -147,25 +185,46 @@ function convertTopoToDot(topo) {
 	Object.keys(edges).forEach(a => {
 		Object.keys(edges[a]).forEach(b => {
 			if (!(isProcessor(a) || isProcessor(b))) {
-				results.push(`"${a}" -> "${b}";`);
+				results.push(egdeWithLabel(a, b, label));
 			}
 		})
 	});
 
 	// if (results.length) results.push(`}`);
 
-	return `
-	digraph G {
-		label = "Kafka Streams Topology"
+	let joined_lines = results.join('\n');
+	return joined_lines;
+}
 
-		${results.join('\n')}
+function fetchTopology(server) {
+	var xmlHttp = new XMLHttpRequest();
+	xmlHttp.open( "GET", "http://" + server + "/describe", false ); // false for synchronous request
+	xmlHttp.send( null );
+	return xmlHttp.responseText;
+}
+
+function server(location, name) {
+	return {
+		location: location,
+		name: name
 	}
-	`;
 }
 
 function update() {
-	var topo = input.value;
-	var dotCode = convertTopoToDot(topo);
+	//var topo = input.value;
+
+	var dotCodeLines = "";
+
+	selectedServers().forEach(s => dotCodeLines += convertTopoToDot(fetchTopology(s.location), s.name));
+
+	var dotCode = `
+	digraph G {
+		label = "Kafka Streams Topology"
+
+		${dotCodeLines}
+	}
+	`;
+
 	if (DEBUG) console.log('dot code\n', dotCode);
 
 
@@ -195,8 +254,6 @@ function update() {
 
 	try {
 		traverseSvgToRough(g);
-
-		sessionStorage.setItem(STORAGE_KEY, topo);
 	}
 	catch (e) {
 		console.error('Exception generating graph', e && e.stack || e);
@@ -321,21 +378,6 @@ function scheduleUpdate() {
 	}, 200);
 }
 
-// startup
-var topo;
-
-if (window.location.hash.length > 1) {
-	try {
-		topo = atob(window.location.hash.substr(1));
-	} catch {
-		console.log("Can not read topo from url hash");
-		window.location.hash = "";
-	}
-}
-
-if (!topo) {
-	topo = sessionStorage.getItem(STORAGE_KEY);
-}
-
-if (topo) input.value = topo;
+servers.forEach(server => createOption(server));
+x.options[0].selected = true;
 update();
